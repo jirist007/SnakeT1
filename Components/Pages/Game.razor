@@ -54,7 +54,7 @@
     private int speedMs = 200;
     private int score;
     private bool isGameOver;
-    private bool shouldFocusGameBoard = true;
+    private bool focusPending = true;
 
     protected override void OnParametersSet()
     {
@@ -65,12 +65,12 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!shouldFocusGameBoard)
+        if (!focusPending)
         {
             return;
         }
 
-        shouldFocusGameBoard = false;
+        focusPending = false;
         await gameBoardElement.FocusAsync();
     }
 
@@ -94,7 +94,7 @@
             StartTimer();
         }
 
-        shouldFocusGameBoard = true;
+        focusPending = true;
     }
 
     private void StartTimer()
