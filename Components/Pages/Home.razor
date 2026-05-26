@@ -1,0 +1,40 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject NavigationManager Navigation
+
+<PageTitle>Nastavení hry</PageTitle>
+
+<h1>Nastavení hry Snake</h1>
+
+<EditForm Model="@settings" OnValidSubmit="StartGame">
+    <DataAnnotationsValidator />
+
+    <div class="mb-3">
+        <label class="form-label" for="board-size">Velikost hrací plochy</label>
+        <InputNumber id="board-size" class="form-control" @bind-Value="settings.BoardSize" min="10" max="30" />
+    </div>
+
+    <div class="mb-3">
+        <label class="form-label" for="speed-ms">Rychlost hry (ms / krok)</label>
+        <InputNumber id="speed-ms" class="form-control" @bind-Value="settings.SpeedMs" min="80" max="1000" />
+    </div>
+
+    <button type="submit" class="btn btn-primary">Spustit hru</button>
+</EditForm>
+
+@code {
+    private GameSettings settings = new();
+
+    private void StartGame()
+    {
+        var boardSize = Math.Clamp(settings.BoardSize, 10, 30);
+        var speedMs = Math.Clamp(settings.SpeedMs, 80, 1000);
+        Navigation.NavigateTo($"/game?boardSize={boardSize}&speedMs={speedMs}");
+    }
+
+    private sealed class GameSettings
+    {
+        public int BoardSize { get; set; } = 20;
+        public int SpeedMs { get; set; } = 200;
+    }
+}

@@ -1,0 +1,222 @@
+﻿@page "/game"
+@rendermode InteractiveServer
+@implements IDisposable
+@inject NavigationManager Navigation
+
+<PageTitle>Hra Snake</PageTitle>
+
+<h1>Hra Snake</h1>
+
+<p>Skóre: <strong>@score</strong></p>
+
+@if (isGameOver)
+{
+    <p class="text-danger fw-bold">Konec hry</p>
+}
+
+<div class="game-board" style="grid-template-columns: repeat(@boardSize, 1fr);" @onkeydown="HandleKeyDown" tabindex="0">
+    @for (var y = 0; y < boardSize; y++)
+    {
+        for (var x = 0; x < boardSize; x++)
+        {
+            var cssClass = GetCellClass(x, y);
+            <div class="@cssClass"></div>
+        }
+    }
+</div>
+
+<div class="mt-3 d-flex gap-2 flex-wrap">
+    <button class="btn btn-outline-secondary" @onclick="Restart">Hrát znovu</button>
+    <button class="btn btn-outline-primary" @onclick="() => SetDirection(Direction.Up)">Nahoru</button>
+    <button class="btn btn-outline-primary" @onclick="() => SetDirection(Direction.Left)">Doleva</button>
+    <button class="btn btn-outline-primary" @onclick="() => SetDirection(Direction.Right)">Doprava</button>
+    <button class="btn btn-outline-primary" @onclick="() => SetDirection(Direction.Down)">Dolů</button>
+    <button class="btn btn-link" @onclick="GoToSetup">Zpět na nastavení</button>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "boardSize")]
+    public int? BoardSizeQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "speedMs")]
+    public int? SpeedMsQuery { get; set; }
+
+    private readonly Random random = new();
+    private readonly object syncRoot = new();
+    private readonly HashSet<(int X, int Y)> snakePositions = [];
+    private readonly List<(int X, int Y)> snake = [];
+
+    private System.Timers.Timer? gameTimer;
+    private (int X, int Y) food;
+    private Direction direction = Direction.Right;
+    private int boardSize = 20;
+    private int speedMs = 200;
+    private int score;
+    private bool isGameOver;
+
+    protected override void OnParametersSet()
+    {
+        boardSize = Math.Clamp(BoardSizeQuery ?? 20, 10, 30);
+        speedMs = Math.Clamp(SpeedMsQuery ?? 200, 80, 1000);
+        Restart();
+    }
+
+    private void Restart()
+    {
+        lock (syncRoot)
+        {
+            isGameOver = false;
+            score = 0;
+            direction = Direction.Right;
+
+            snake.Clear();
+            snakePositions.Clear();
+
+            var center = boardSize / 2;
+            AddSnakePart((center - 1, center));
+            AddSnakePart((center, center));
+            AddSnakePart((center + 1, center));
+
+            PlaceFood();
+            StartTimer();
+        }
+    }
+
+    private void StartTimer()
+    {
+        gameTimer?.Dispose();
+        gameTimer = new System.Timers.Timer(speedMs);
+        gameTimer.Elapsed += async (_, _) =>
+        {
+            UpdateGame();
+            await InvokeAsync(StateHasChanged);
+        };
+        gameTimer.AutoReset = true;
+        gameTimer.Start();
+    }
+
+    private void UpdateGame()
+    {
+        lock (syncRoot)
+        {
+            if (isGameOver || snake.Count == 0)
+            {
+                return;
+            }
+
+            var head = snake[^1];
+            var next = direction switch
+            {
+                Direction.Up => (head.X, head.Y - 1),
+                Direction.Down => (head.X, head.Y + 1),
+                Direction.Left => (head.X - 1, head.Y),
+                _ => (head.X + 1, head.Y)
+            };
+
+            if (IsOutside(next) || snakePositions.Contains(next))
+            {
+                isGameOver = true;
+                gameTimer?.Stop();
+                return;
+            }
+
+            AddSnakePart(next);
+
+            if (next == food)
+            {
+                score++;
+                PlaceFood();
+                return;
+            }
+
+            var tail = snake[0];
+            snake.RemoveAt(0);
+            snakePositions.Remove(tail);
+        }
+    }
+
+    private bool IsOutside((int X, int Y) position)
+        => position.X < 0 || position.Y < 0 || position.X >= boardSize || position.Y >= boardSize;
+
+    private void PlaceFood()
+    {
+        var freeSpots = boardSize * boardSize - snake.Count;
+        if (freeSpots <= 0)
+        {
+            isGameOver = true;
+            gameTimer?.Stop();
+            return;
+        }
+
+        do
+        {
+            food = (random.Next(0, boardSize), random.Next(0, boardSize));
+        } while (snakePositions.Contains(food));
+    }
+
+    private void AddSnakePart((int X, int Y) part)
+    {
+        snake.Add(part);
+        snakePositions.Add(part);
+    }
+
+    private void SetDirection(Direction newDirection)
+    {
+        if (IsOpposite(direction, newDirection))
+        {
+            return;
+        }
+
+        direction = newDirection;
+    }
+
+    private static bool IsOpposite(Direction current, Direction next)
+        => (current == Direction.Up && next == Direction.Down)
+           || (current == Direction.Down && next == Direction.Up)
+           || (current == Direction.Left && next == Direction.Right)
+           || (current == Direction.Right && next == Direction.Left);
+
+    private string GetCellClass(int x, int y)
+    {
+        if (food == (x, y))
+        {
+            return "cell food";
+        }
+
+        return snakePositions.Contains((x, y)) ? "cell snake" : "cell";
+    }
+
+    private void HandleKeyDown(KeyboardEventArgs args)
+    {
+        switch (args.Key)
+        {
+            case "ArrowUp":
+                SetDirection(Direction.Up);
+                break;
+            case "ArrowDown":
+                SetDirection(Direction.Down);
+                break;
+            case "ArrowLeft":
+                SetDirection(Direction.Left);
+                break;
+            case "ArrowRight":
+                SetDirection(Direction.Right);
+                break;
+        }
+    }
+
+    private void GoToSetup() => Navigation.NavigateTo("/");
+
+    public void Dispose()
+    {
+        gameTimer?.Dispose();
+    }
+
+    private enum Direction
+    {
+        Up,
+        Down,
+        Left,
+        Right
+    }
+}
