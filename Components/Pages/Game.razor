@@ -14,7 +14,7 @@
     <p class="text-danger fw-bold">Konec hry</p>
 }
 
-<div class="game-board" style="grid-template-columns: repeat(@boardSize, 1fr);" @onkeydown="HandleKeyDown" tabindex="0">
+<div class="game-board" style="grid-template-columns: repeat(@boardSize, 1fr);" @onkeydown="HandleKeyDown" @onkeydown:preventDefault="true" tabindex="0" @ref="gameBoardElement">
     @for (var y = 0; y < boardSize; y++)
     {
         for (var x = 0; x < boardSize; x++)
@@ -47,18 +47,31 @@
     private readonly List<(int X, int Y)> snake = [];
 
     private System.Timers.Timer? gameTimer;
+    private ElementReference gameBoardElement;
     private (int X, int Y) food;
     private Direction direction = Direction.Right;
     private int boardSize = 20;
     private int speedMs = 200;
     private int score;
     private bool isGameOver;
+    private bool focusPending = true;
 
     protected override void OnParametersSet()
     {
         boardSize = Math.Clamp(BoardSizeQuery ?? 20, 10, 30);
         speedMs = Math.Clamp(SpeedMsQuery ?? 200, 80, 1000);
         Restart();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!focusPending)
+        {
+            return;
+        }
+
+        focusPending = false;
+        await gameBoardElement.FocusAsync();
     }
 
     private void Restart()
@@ -80,6 +93,8 @@
             PlaceFood();
             StartTimer();
         }
+
+        focusPending = true;
     }
 
     private void StartTimer()
